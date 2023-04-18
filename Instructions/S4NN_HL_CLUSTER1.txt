@@ -1,0 +1,161 @@
+SET REG[0] cluster_id
+SET REG[1] timestep
+SET REG[2] input_addr
+SET REG[3] queue_addr
+SET REG[4] spike
+SET REG[5] spike_timestep
+SET REG[6] spike_id
+SET REG[7] num
+SET REG[8] weight_ddr_addr
+SET REG[9] max_timestep
+SET REG[10] image_id
+SET REG[11] cmp1
+SET REG[12] cmp2
+
+SET PE_REG[0] _cluster_id
+SET PE_REG[1] _pe_id
+SET PE_REG[2] _temp_1
+SET PE_REG[3] _temp_2
+SET PE_REG[4] _temp_3
+SET PE_REG[5] _temp_4
+SET PE_REG[6] _temp_5
+SET PE_REG[7] _temp_6
+SET PE_REG[8] _potential
+SET PE_REG[9] _potential_v
+SET PE_REG[10] _potential_id
+SET PE_REG[11] _addr
+SET PE_REG[12] _weight_addr
+SET PE_REG[13] _weight_ddr_addr
+SET PE_REG[14] _weight
+SET PE_REG[15] _output
+SET PE_REG[16] _spike_id_timestep
+SET PE_REG[17] _spike_id
+SET PE_REG[18] _num
+SET PE_REG[19] _threshold
+SET PE_REG[20] _lrn_rate
+SET PE_REG[21] _lambda
+SET PE_REG[22] _max_timestep
+SET PE_REG[23] _spike_src_id
+SET PE_REG[24] _spike
+
+                    mov <_lrn_rate>, d5, #0001                                      // store learning rate _lrn_rate = 5
+                    mov <_lambda>, d1000000, #0001                                  // store regularization factor _lambda = 1000000
+                    mov <_threshold>, d100, #0001                                     // _threshold = 100
+                    lft <_threshold>, <_threshold>, d22, #0001                      // _threshold = (1 << 22) = 2^22
+                    mov <max_timestep>, d255                                        // max_timestep = 256
+                    mov <_max_timestep>, <max_timestep>, #0001                      // _max_timestep = max_timestep
+                    mov <num>, d100                                          // number of neurons handle by this cluster num = 100
+                    mov <_num>, d100, #0001                                         // _num = 100
+                    mov <image_id>, #0                                              // image index image_id = 0
+
+HL_init:            mov <input_addr>, #0                                            // input_addr = 0
+                    rdi <spike>, <input_addr>                                       // spike = input_mem[input_addr]
+                    mov <_spike>, <spike>, #0001
+                    sgs <_spike_id>, <_spike>, d31, d24, #0001             // _spike_id_timestep <= _spike_id[31:24]
+                    mov <timestep>, <_spike_id>,#0001                         // timestep = spike_id
+                    mov <_temp_5>, <timestep>, #0001                                 // _temp_5 = timestep
+                    mov <input_addr>, #0                                            // input_addr = 0
+                    mov <_weight_addr>, #0, #0001                                   // _weight_addr = 0
+
+
+
+HL_input_read:      rdi <spike>, <input_addr>                                       // spike = input_mem[input_addr]
+                    mov <_spike_id>, <spike>, #0001
+                    //sgs <_spike_id_timestep>, <_spike_id>, d31, d24, #0001                        // _spike_id_timestep = _spike_id[31:24]
+                    //sgs <_spike_src_id>, <_spike_id>, d23, d0, #0001                               // _spike_src_id = _spike_id[23:0]
+
+                    //sgs <_spike_id_timestep>, <_spike_id>, d31, d24, #0001             // _spike_id_timestep <= _spike_id[31:24]
+                    rft <_spike_id_timestep>, <_spike_id>, d24, #0001
+                    and0 <_spike_id_timestep>, <_spike_id_timestep>, #0000_0000_1111_1111, #0001
+                    and1 <_spike_id_timestep>, <_spike_id_timestep>, #0000_0000_0000_0000, #0001
+                    and2 <_spike_id_timestep>, <_spike_id_timestep>, #0000_0000_0000_0000, #0001
+                    and3 <_spike_id_timestep>, <_spike_id_timestep>, #0000_0000_0000_0000, #0001
+                    //sgs <_spike_src_id>, <_spike_id>, d23, d0, #0001                // _spike_src_id <= _spike_id[23:0]
+                    and0 <_spike_src_id>, <_spike_id>, #1111_1111_1111_1111, #0001
+                    and1 <_spike_src_id>, <_spike_src_id>, #0000_0000_1111_1111, #0001
+                    and2 <_spike_src_id>, <_spike_src_id>, #0000_0000_0000_0000, #0001
+                    and3 <_spike_src_id>, <_spike_src_id>, #0000_0000_0000_0000, #0001
+
+
+
+
+                    mov <cmp1>, <_spike_id_timestep>, #0001                            // cmp1 <= _spike_id_timestep
+                    je <timestep>, <cmp1>, !HL_handle_init                // if timestep == _spike_id_timestep: jump to !HL_handle_init
+                    mov <_addr>, #0, #0001                                          // _addr = 0
+
+HL_ckf:             rpm <_potential>, <_addr>, #0001                                // _potential = potential_mem[_addr]
+                    sgs <_temp_1>, <_potential>, d63, d63, #0001                     // _temp_1 = _potential[63]
+                    mov  <cmp1>, <_temp_1>, #0001                                    // cmp1 = _temp_1
+                    je <cmp1>, d1, !HL_ckf_end                                      // if MSB bit == 1, the neuron has emitted a spike: jump to HL_ckf_end
+                    lft <_temp_6>, <_temp_5>, d8, #0001                      //_temp_6={_temp_5[7:0],0000_0000}
+                    cct <_temp_4>, <_temp_6>, <_potential>, d15, d0, d63, d48 ,#0001   // _temp_4 = {_timestep[15:0], _potential[63:48]}
+                    //and1 <_temp_4>, <_temp_4>, #0000_1111_1111_1111, #0001            // _temp_4[31:28] = 4'b0
+                    asgs <_potential_v>, <_potential>, d47, d0, #0001               // _potential_v = _potential[47:0]
+                    opt  <_potential_v>, <_threshold>, <_temp_4>, #0000_0000_0001_0000, #0001 // if _potential[47:00] >= _threshold, write {_cluster_musk[15:00], _temp_4[47:0]} to output FIFO, reset _potential[47:00] to 0
+                    mov  <cmp1>, <_potential_v>, #0001                              // cmp1 = _potential_v
+                    jn   <cmp1>, d0, !OL_ckf_inhibit_end                            // if _potential_v!=0, don't need to inhibit the neuron
+                    mov  <_temp_1>, d1, #0001                                        // _temp_1 = 1
+                    cct  <_potential>, <_temp_1>, <_potential>, d0, d0, d62, d0, #0001  // set flag as 1 to indicate this neuron has fired a spike
+
+OL_ckf_inhibit_end: sgs <_potential_id>, <_potential>, d63, d48, #0001              // _potential_id = _potential[63:48]
+                    cct <_potential>, <_potential_id>, <_potential_v>, d15, d0, d47, d0, #0001  // _potential <= {potential_id[15:00], potential_v[47:00]}
+                    wbp <_addr>, <_potential>,  #0001                               // write back, potential_mem[_addr] <= _potential
+
+HL_ckf_end:         add <_addr>, <_addr>, #1, #0001                                 // _addr += 1
+                    mov <cmp1>, <_addr>, #0001                                      // cmp1 = _addr
+                    jn <cmp1>, <num>, !HL_ckf                                       // if _addr != 100, continue checking firing
+                    //-----------------------spike_timestep not assign----------------------
+                    je <timestep>, <max_timestep>, !end_img_forward           // if spike_timestep == max_timestep: finish forward path
+                    //-----------------------spike_timestep not assign----------------------
+
+HL_sync:            add <timestep>, <timestep>, #1                                  // timestep += 1
+                    add <_temp_5>, <_temp_5>, #1, #0001                               // _temp_5 += 1
+                    syn                                                             // synchronize
+                    jmp  !HL_input_read                                            // go to read the next input
+
+HL_handle_init:     add <input_addr>, <input_addr>, #1                              // input_addr += 1
+                    mov <_addr>, #0, #0001                                          // _addr = 0
+                    mov <_weight_ddr_addr>, <_spike_src_id>, #0001                       // weight_ddr_addr = _spike_id
+                    mul <_weight_ddr_addr>, <_weight_ddr_addr>,<_num>, #0001                           // weight_ddr_addr *= _num
+                    ldw <_weight_addr>, <_weight_ddr_addr>, <_num>, #0001           // load weight from ddr _wieght_addr = weight_mem[_weight_ddr_addr]
+
+HL_handle:          rwm <_weight>, <_addr>, #0001                                                      // _weight = weight_mem[_addr]
+                    rpm <_potential>, <_addr>, #0001                                                  // _potential = potential_mem[_addr]
+                    sgs <_potential_id>, <_potential>, d63, d48, #0001                               // _potential_id <= potential[63:48] unsigned
+                    asgs <_potential_v>, <_potential>, d47, d0, #0001                               // _potential_v <= potential[47:00] signed extending
+                    adds <_potential_v>, <_potential_v>, <_weight>, #0001                        // _potential_v <= _potential_v + _weight
+                    cct <_potential>, <_potential_id>, <_potential_v>, d15, d0, d47, d0, #0001  // _potential <= {potential_id[15:00], potential_v[47:00]}
+                    wbp <_addr>, <_potential>, #0001                                                  // write back, potential_mem[_addr] <= _potential
+                    add <_addr>, <_addr>, #1, #0001                                                  // _addr += 1
+                    mov <cmp1>, <_addr>, #0001                                                       // cmp1 = _addr
+                    jn <cmp1>, <num>, !HL_handle                                                     // if _addr != 100, updating the next potential
+                    je <timestep>, <max_timestep>, !end_img_forward              // if spike_timestep == max_timestep: finish forward path
+                    jmp !HL_input_read                                              // else go to read the next input
+
+end_img_forward:    mov <_temp_1>, d0, #0001                                         // address for potential memory, start from 0
+
+Set_fake:           rpm <_temp_2>, <_temp_1>, #0001                                   // _temp_2 = potential_mem[_temp_1]
+                    sgs <_temp_3>, <_temp_2>, d63, d63, #0001                         // flag for spike _temp_3 = _temp_2[63]
+                    mov <cmp1>, <_temp_3>, #0001                                     // cmp1 = _temp_3
+                    je <cmp1>, d1, !Set_fake_end                                    // if cmp1 == 1, the neuron has spiked: jump to Set_fake_end
+                    mov <_temp_3>, d1, #0001                                         // _temp_3 = 1
+                    cct <_temp_2>, <_temp_3>, <_temp_2>, d0, d0, d62, d0, #0001        // _temp_2[63] = 1
+                    wbp <_temp_1>, <_temp_2>, #0001                                   // write back potential potential_mem[_temp_1] = _temp_2
+
+                    mov <_temp_6>,d255,#0001
+                    lft <_temp_6>, <_temp_6>, d8, #0001                      //_temp_6={_temp_6[7:0],0000_0000}
+                    cct <_temp_3>, <_temp_6>, <_temp_2>, d15, d0, d63, d48 , #0001           // _temp_3 = {_timestep[15:0], _potential[63:48]}
+                    mov <_temp_2>, <_threshold>, #0001                               // _temp_2 = _threshold
+                    opt <_temp_2>, <_threshold>, <_temp_3>, #0000_0000_0001_0000 , #0001      // output a fake spike
+
+Set_fake_end:       add <_temp_1>, <_temp_1>, d1, #0001                               // _temp_1 += 1
+                    mov <cmp1>, <_temp_1>, #0001                                     // cmp1 = _temp_1
+                    jn <cmp1>, <num>, !Set_fake                                     // if cmp1 != 100: set fake the remaining neurons
+                    syn                                                             // else: synchronize
+
+
+
+end_image_learn:    syn
+                    add  <image_id>, <image_id>, #1
+                    jng  <image_id>, d50000, !HL_init
+                    done

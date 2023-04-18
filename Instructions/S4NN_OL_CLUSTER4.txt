@@ -1,0 +1,194 @@
+SET REG[0] cluster_id
+SET REG[1] timestep
+SET REG[2] input_addr
+SET REG[3] queue_addr
+SET REG[4] spike
+SET REG[5] spike_timestep
+SET REG[6] spike_id
+SET REG[7] num
+SET REG[8] weight_ddr_addr
+SET REG[9] max_timestep
+SET REG[10] image_id
+SET REG[11] cmp1
+SET REG[12] cmp2
+
+SET PE_REG[0] _cluster_id
+SET PE_REG[1] _pe_id
+SET PE_REG[2] _general_temp_1
+SET PE_REG[3] _general_temp_2
+SET PE_REG[4] _general_temp_3
+SET PE_REG[5] _general_temp_4
+SET PE_REG[6] _general_temp_5
+SET PE_REG[7] _general_temp_6
+SET PE_REG[8] _potential
+SET PE_REG[9] _potential_v
+SET PE_REG[10] _potential_id
+SET PE_REG[11] _addr
+SET PE_REG[12] _weight_addr
+SET PE_REG[13] _weight_ddr_addr
+SET PE_REG[14] _weight
+SET PE_REG[15] _output
+SET PE_REG[16] _spike_time
+SET PE_REG[17] _spike
+SET PE_REG[18] _num
+SET PE_REG[19] _threshold
+SET PE_REG[20] _lrn_rate
+SET PE_REG[21] _lambda
+SET PE_REG[22] _target_timestep_0
+SET PE_REG[23] _target_timestep_1
+SET PE_REG[24] _target_timestep_2
+SET PE_REG[25] _min_firing
+SET PE_REG[26] _label
+SET PE_REG[27] _max_timestep
+SET PE_REG[28] _gamma
+SET PE_REG[29] _delta_sqrt
+SET PE_REG[30] _delta_acc
+SET PE_REG[31] _delta_sq
+SET PE_REG[32] _spike_id
+
+// Tips: 
+// Please use "sub", "mul", and "dvd" only on the PE side. 
+
+
+                    //mov  <_label>, d3, #0001                                          //store the label for the current image
+                            //This line for <_label> is only for demonstration. Labels should be loaded from DDR realistically. 
+                    mov  <_lrn_rate>, d5, #0001                                         //store the learning rate, "d5" is just for example, not the real value
+                    mov  <_lambda>, d1000000, #0001                                     //store the regularization factor, "d1000000" is just for example, not the real value
+                    mov  <_gamma>, d3, #0001                                            //store the gamma factor, "d3" is just for example, not the real value
+                    mov  <_threshold>, d100, #0001                                        //_threshold <= 100
+                    lft  <_threshold>, <_threshold>, d22, #0001                         //_threshold <= (1<<22) = 2^22, "2^22" is just for example, not the real value
+                    mov  <_addr>, d10, #0001
+                    mov  <_potential>, d255, #0001
+                    wbp  <_addr>, <_potential>, #0001                                   //store the target time for neuron 0
+                    mov  <_addr>, d11, #0001
+                    mov  <_potential>, d255, #0001
+                    wbp  <_addr>, <_potential>, #0001                                   //store the target time for neuron 1
+                    mov  <_addr>, d12, #0001
+                    mov  <_potential>, d255, #0001
+                    wbp  <_addr>, <_potential>, #0001                                   //store the target time for neuron 2
+                    mov  <_addr>, d13, #0001
+                    mov  <_potential>, d255, #0001
+                    wbp  <_addr>, <_potential>, #0001                                   //store the target time for neuron 3
+                    mov  <_addr>, d14, #0001
+                    mov  <_potential>, d255, #0001
+                    wbp  <_addr>, <_potential>, #0001                                   //store the target time for neuron 4
+                    mov  <_addr>, d15, #0001
+                    mov  <_potential>, d255, #0001
+                    wbp  <_addr>, <_potential>, #0001                                   //store the target time for neuron 5
+                    mov  <_addr>, d16, #0001
+                    mov  <_potential>, d255, #0001
+                    wbp  <_addr>, <_potential>, #0001                                   //store the target time for neuron 6
+                    mov  <_addr>, d17, #0001
+                    mov  <_potential>, d255, #0001
+                    wbp  <_addr>, <_potential>, #0001                                   //store the target time for neuron 7
+                    mov  <_addr>, d18, #0001
+                    mov  <_potential>, d255, #0001
+                    wbp  <_addr>, <_potential>, #0001                                   //store the target time for neuron 8
+                    mov  <_addr>, d19, #0001
+                    mov  <_potential>, d255, #0001
+                    wbp  <_addr>, <_potential>, #0001                                   //store the target time for neuron 9
+                            //The values used above are not accurate as the precision hasn't been decided.
+                    mov  <image_id>, #0                                                 //store the image index
+                    mov  <max_timestep>, d255                                         //store the maximum timestep, "d255" is just for example, not the real value
+                    mov  <_max_timestep>, <max_timestep>, #0001
+                    mov  <num>, d10                                                     //store the number of output neuron
+                    mov  <_num>, d10, #0001                                             //store the number of output neuron
+
+OL_init:            mov <input_addr>, #0                                                                // input_addr = 0
+                    rdi <spike>, <input_addr>                                       // spike = input_mem[input_addr]
+                    mov <_spike>, <spike>, #0001
+                    sgs <_spike_id>, <_spike>, d31, d24, #0001             // _spike_id_timestep <= _spike_id[31:24]
+                    mov <timestep>,<_spike_id>,#0001                                 // timestep = _spike_id (timestep initial to first spike timestep)
+                    mov  <_general_temp_5>, <timestep>, #0001                           //_timestep <= 1
+                    mov  <_weight_addr>, #0, #0001                                      //weight_addr <= 0
+                    
+OL_input_read:      rdi  <spike>, <input_addr>                                          //spike <= input_mem[input_addr]
+                    mov <_spike>, <spike>, #0001
+                    sgs  <_spike_time>, <_spike>, d31, d24, #0001                            //spike_timestep <= spike[31:24]
+                    sgs  <_spike_id>, <_spike>, d23, d0, #0001                                   //spike_id <= spike[23:00]
+                    mov <cmp2>, <_spike_time>, #0001                                        // cmp2 <= _spike_time
+                    je   <timestep>, <cmp2>, !OL_handle_init                  //if spike_timestep == current timestep, go to do potential update
+                    mov  <_addr>, #0, #0001                                             //_addr <= 0
+
+OL_ckf:             rpm  <_potential>, <_addr>, #0001                                   //_potential <= potential_mem[_addr]
+                    sgs  <_general_temp_1>, <_potential>, d63, d63, #0001               //bit select the flag for having spiked
+                    mov  <cmp1>, <_general_temp_1>, #0001
+                    je   <cmp1>, d1, !OL_ckf_end                                        //if cmp1 == 1: jump to !OL_ckf_end (already fired)
+
+                    lft <_general_temp_6>, <_general_temp_5>, d8, #0001                      //_temp_6={_temp_5[7:0],0000_0000}
+                    cct  <_general_temp_4>, <_general_temp_6>, <_potential>, d15, d0, d63, d48 ,#0001   // _general_temp_4 <= {_timestep[15:0], _potential[63:48]}
+               //   and1 <_general_temp_4>, <_general_temp_4>, #0000_1111_1111_1111, #0001             // _general_temp_4[31:28] <= 4'b0
+                    asgs <_potential_v>, <_potential>, d47, d0, #0001                                  // _potential_v = _potential[47:0]
+                    opt  <_potential_v>, <_threshold>, <_general_temp_4>, #0000_0000_0010_0000, #0001  // if _potential[47:00] >= _threshold, write {_cluster_musk[15:00], _general_temp_4[31:00]} to output FIFO, reset _potential[31:00] to 0
+                    mov  <cmp1>, <_potential_v>, #0001                                                 // cmp1 = _potential_v
+                    jn   <cmp1>, d0, !OL_ckf_inhibit_end                                               //if _potential_v!=0, don't need to inhibit the neuron
+                    mov  <_general_temp_1>, d1, #0001
+                    cct  <_potential>, <_general_temp_1>, <_potential>, d0, d0, d62, d0, #0001         //set the flag as 1 to indicate this neuron has fired a spike
+                    //this cct can be replaced by and & add
+                    
+OL_ckf_inhibit_end: sgs  <_potential_id>, <_potential>, d63, d48, #0001                                // _potential_id = _potential[63:48]
+                    cct  <_potential>, <_potential_id>, <_potential_v>, d15, d0, d47, d0, #0001        // _potential <= {potential_id[15:00], potential_v[47:00]}
+                    wbp  <_addr>, <_potential>,  #0001                                                 // write back, potential_mem[_addr] <= _potential
+
+OL_ckf_end:         add  <_addr>, <_addr>, #1, #0001                                                   // _addr ++;
+                    mov  <cmp1>, <_addr>, #0001                                                        // cmp1 = _addr
+                    jn   <cmp1>, d10, !OL_ckf                                                        // if _addr != 10, continue checking firing
+              //    je    <cmp2>, <max_timestep>, !end_img_forward                           // if _spike_time == max_timestep: finish forward path
+                    je    <timestep>, <max_timestep>, !end_img_forward                           // if timestep == max_timestep: finish forward path
+
+OL_sync:            add  <timestep>, <timestep>, #1                                                    // timestep ++
+                    add  <_general_temp_5>, <_general_temp_5>, #1, #0001                               // _timestep ++
+                    syn
+                    jmp  !OL_input_read                                                                // go to read the next input
+
+OL_handle_init:     add  <input_addr>, <input_addr>, #1                                                // input_addr ++
+                    mov  <_addr>, #0, #0001                                                            // _addr <= 0
+                    mov  <_weight_ddr_addr>, <_spike_id>, #0001
+                    mul  <_weight_ddr_addr>, <_weight_ddr_addr>, <_num>, #0001                         // _weight_ddr_addr <= 10 * spike_id
+                    ldw  <_weight_addr>, <_weight_ddr_addr>, <_num>, #0001                             // load weight from ddr
+                    //store on-chip or off-chip
+                    
+OL_handle:          rwm  <_weight>, <_addr>, #0001                                                     // _weight <= weight_mem[_addr]
+                    rpm  <_potential>, <_addr>, #0001                                                  // _potential <= potential_mem[_addr]
+                    sgs  <_potential_id>, <_potential>, d63, d48, #0001                                // _potential_id <= potential[63:48] unsigned
+                    asgs <_potential_v>, <_potential>, d47, d0, #0001                                  // _potential_v <= potential[47:00] signed extending
+                    adds <_potential_v>, <_potential_v>, <_weight>, #0001                              // _potential_v <= _potential_v + _weight
+                    cct  <_potential>, <_potential_id>, <_potential_v>, d15, d0, d47, d0, #0001        // _potential <= {potential_id[15:00], potential_v[47:00]}
+                    wbp  <_addr>, <_potential>, #0001                                                  // write back, potential_mem[_addr] <= _potential
+                    add  <_addr>, <_addr>, #1, #0001                                                   // _addr ++
+                    mov  <cmp1>, <_addr>, #0001                                                        // cmp1 = _addr
+                    jn   <cmp1>,d10, !OL_handle                                                     // if _addr != 10, updating the next potential
+                    je   <timestep>, <max_timestep>, !end_img_forward                           // if spike_timestep == max_timestep: finish forward path
+                    jmp  !OL_input_read                                                                // else go to read the next input
+
+end_img_forward:    mov  <_general_temp_1>, d0, #0001                                                  // address for potential memory, start form 0
+
+Set_fake:           rpm  <_general_temp_2>, <_general_temp_1>, #0001                                   // _general_temp_2 = potential_mem[_general_temp_1]
+                    sgs  <_general_temp_3>, <_general_temp_2>, d63, d63, #0001                         // flag for spike _general_temp_3 = _general_temp_2[63]
+                    mov  <cmp1>, <_general_temp_3>, #0001                                              // cmp1 = _general_temp_3
+                    je   <cmp1>, d1, !Set_fake_end                                                     // if flag!=1, it means the neuron has never spiked, then we need to set a fake spike
+                    mov  <_general_temp_3>, d1, #0001                                                  // _general_temp_3 = 1
+                    cct  <_general_temp_2>, <_general_temp_3>, <_general_temp_2>, d0, d0, d62, d0, #0001        // _general_temp_2[63] = 1
+                    wbp  <_general_temp_1>, <_general_temp_2>, #0001                                   // write back potential
+                    mov <_general_temp_6>,d255,#0001
+                    lft <_general_temp_6>, <_general_temp_6>, d8, #0001                      //_temp_6={_temp_5[7:0],0000_0000}
+                    cct  <_general_temp_3>, <_general_temp_6>, <_general_temp_2>, d15, d0, d63, d48 ,#0001   // _general_temp_3 <= {_timestep[15:0], _potential[63:48]}
+
+              //      cct  <_general_temp_3>, <_general_temp_5>, <_general_temp_2>, d7, d0, d55, d32 ,#0001   // _general_temp_3 <= {_timestep[7:0], _general_temp_2[55:32]}
+                    mov <_general_temp_2>, <_threshold>, #0001                                         // _general_temp_2 = _threshold
+                    opt  <_general_temp_2>, <_threshold>, <_general_temp_3>, #0000_0000_0010_0000, #0001  // output a fake spike
+
+Set_fake_end:       add  <_general_temp_1>, <_general_temp_1>, d1, #0001                               // _general_temp_1 += 1
+                    mov  <cmp1>, <_general_temp_1>, #0001                                              // cmp1 = _general_temp_1
+                    jn   <cmp1>, d10, !Set_fake                                                        // if cmp1 != 10: set fake the remaining neurons
+                    syn                                                                                // the last timestep finished, then sync with other clusters
+
+
+
+
+
+
+end_image_learn:    syn
+                    add  <image_id>, <image_id>, #1
+                    jng  <image_id>, d50000, !OL_init
+                    done
